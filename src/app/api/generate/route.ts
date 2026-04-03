@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Structure to support multiple providers (OpenRouter, Anthropic, etc.) easily later.
+const SUPPORTED_MODELS = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'] as const;
+type SupportedModel = typeof SUPPORTED_MODELS[number];
+
 export async function POST(req: Request) {
   try {
     const { prompt, model } = await req.json();
@@ -10,31 +12,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      // Mock response if API key is missing for smooth UI flow during testing
-      console.warn("OPENAI_API_KEY is missing. Returning a mocked response.");
-      return NextResponse.json({ 
-        text: `[Mocked Response] The model "${model}" received your prompt: "${prompt}".\n\nAdd your OPENAI_API_KEY to .env.local to get real responses.` 
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn('GEMINI_API_KEY is missing. Returning a mocked response.');
+      return NextResponse.json({
+        text: `[Mocked Response] The model "${model}" received your prompt: "${prompt}".\n\nAdd your GEMINI_API_KEY to .env to get real responses.`,
       });
     }
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // Validate if it's one of the supported models, otherwise fallback
-    const validModel = ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'].includes(model) ? model : 'gpt-3.5-turbo';
+    const validModel: SupportedModel = SUPPORTED_MODELS.includes(model as SupportedModel)
+      ? (model as SupportedModel)
+      : 'gemini-2.0-flash';
 
-    const completion = await openai.chat.completions.create({
-      model: validModel,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const geminiModel = genAI.getGenerativeModel({ model: validModel });
 
-    const text = completion.choices[0]?.message.content || 'No response generated.';
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
 
     return NextResponse.json({ text });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('API /generate error:', error);
-    return NextResponse.json({ error: error.message || 'Error communicating with AI' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Error communicating with AI';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

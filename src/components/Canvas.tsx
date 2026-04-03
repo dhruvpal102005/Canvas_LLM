@@ -21,7 +21,7 @@ export default function Canvas() {
         id: crypto.randomUUID(),
         type: 'llmNode',
         position: { x: window.innerWidth / 2 - 240, y: window.innerHeight / 2 - 120 }, // Center node (width 480px)
-        data: { prompt: '', response: '', model: 'gpt-4o', parentId: null, childrenIds: [] }
+        data: { prompt: '', response: '', model: 'gemini-2.0-flash', parentId: null, childrenIds: [] }
       });
     }
   }, [nodes.length, addNode]);
@@ -41,7 +41,7 @@ export default function Canvas() {
         className="touch-none z-10"
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Lines} color="#e5e7eb" gap={24} />
+        <Background variant={BackgroundVariant.Cross} color="#d1d5db" gap={32} size={1} />
       </ReactFlow>
     </div>
   );

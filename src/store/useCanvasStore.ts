@@ -11,7 +11,7 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 
-export type SupportedModel = 'gpt-4o' | 'gpt-4o-mini' | 'gpt-3.5-turbo';
+export type SupportedModel = 'gemini-2.0-flash' | 'gemini-1.5-pro' | 'gemini-1.5-flash';
 
 export type LLMNodeData = {
   prompt: string;

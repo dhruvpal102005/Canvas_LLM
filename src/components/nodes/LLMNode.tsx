@@ -31,31 +31,39 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
         body: JSON.stringify({ prompt: promptToUse, model: data.model }),
       });
 
-      if (!response.ok) throw new Error('API Error');
-
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `API Error (${response.status})`);
+      }
+
       updateNodeData(id, { response: result.text });
     } catch (error) {
       console.error(error);
-      updateNodeData(id, { response: 'Error: Failed to generate response.' });
+      const msg = error instanceof Error ? error.message : 'Failed to generate response.';
+      updateNodeData(id, { response: `⚠️ Error: ${msg}` });
     } finally {
       setIsGenerating(false);
     }
   };
 
   const suggestions = [
-    { text: "fun things to do in nyc" },
-    { text: "what is quantum computing" },
-    { text: "explain how neural networks work" }
+    { text: "best practices for React hooks" },
+    { text: "how to make perfect pasta" },
+    { text: "what are black holes" },
   ];
+
 
   return (
     <div className="relative">
       {/* Background Title for Root Node before interaction */}
       {!data.parentId && !data.response && localPrompt.trim() === '' && !isGenerating && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-8 flex flex-col items-center justify-center pointer-events-none select-none whitespace-nowrap">
-          <h1 className="text-5xl font-semibold tracking-tight text-gray-900 mb-2 pointer-events-auto">LMCanvas</h1>
-          <p className="text-gray-400 font-mono text-[10px] tracking-[0.2em] uppercase pointer-events-auto">Branch off your AI conversations</p>
+          <h1 className="text-[3.25rem] font-bold tracking-tight text-gray-900 mb-2.5 pointer-events-auto" style={{ fontFamily: 'var(--font-geist-sans), sans-serif', letterSpacing: '-0.02em' }}>LMCanvas</h1>
+          <p className="text-gray-400 text-[13px] pointer-events-auto">
+            <span className="underline underline-offset-2 cursor-pointer hover:text-gray-600 transition-colors">Import</span>
+            {' '}your ChatGPT conversations
+          </p>
         </div>
       )}
 
@@ -68,14 +76,19 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
           {/* Header Row */}
           <div className="flex items-center justify-between mb-5">
             {/* Left Pill Group */}
-            <div className="flex items-center gap-2 border border-gray-200 rounded-full px-1.5 py-1 box-border shadow-sm">
-              <div className="flex items-center gap-1.5 px-2">
-                <Bot className="w-4 h-4 text-gray-500" />
-                <span className="text-xs font-medium text-gray-700">GPT-4.0</span>
+            <div className="flex items-center gap-0 border border-gray-200 rounded-full px-1 py-1 box-border">
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5">
+                <span className="text-xs text-gray-400 font-medium select-none">@</span>
+                <span className="text-xs font-medium text-gray-700">
+                  {data.model === 'gemini-2.0-flash' ? 'Gemini 2.0 Flash'
+                    : data.model === 'gemini-1.5-pro' ? 'Gemini 1.5 Pro'
+                    : data.model === 'gemini-1.5-flash' ? 'Gemini 1.5 Flash'
+                    : data.model}
+                </span>
               </div>
-              <div className="w-px h-4 bg-gray-200" />
-              <button className="flex items-center justify-center p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700">
-                <Plus className="w-4 h-4" />
+              <div className="w-px h-3.5 bg-gray-200" />
+              <button className="flex items-center justify-center p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600">
+                <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -129,7 +142,7 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
 
           {/* Suggestions Row */}
           {!data.response && (
-            <div className="flex flex-wrap items-center gap-2 mt-4">
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
               {suggestions.map((suggestion, idx) => (
                 <button
                   key={idx}
@@ -137,9 +150,9 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
                     setLocalPrompt(suggestion.text);
                     handleGenerate(suggestion.text);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-full text-xs font-semibold tracking-wide text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
+                  className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 rounded-full text-[11px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-gray-400 font-light" />
+                  <Sparkles className="w-3 h-3 text-gray-400" />
                   {suggestion.text}
                 </button>
               ))}
