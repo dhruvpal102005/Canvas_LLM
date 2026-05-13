@@ -4,7 +4,7 @@ import { useCanvasStore, LLMNodeData } from '@/store/useCanvasStore';
 import { useState, useRef, useEffect } from 'react';
 
 export default function LLMNode({ id, data }: { id: string; data: LLMNodeData }) {
-  const { updateNodeData, branchFromNode, deleteNode } = useCanvasStore();
+  const { updateNodeData, branchFromNode, deleteNode, getConversationHistory } = useCanvasStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [localPrompt, setLocalPrompt] = useState(data.prompt);
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
@@ -44,10 +44,17 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
     setRetryAfter(null);
 
     try {
+      // Get conversation history from parent nodes
+      const conversationHistory = data.parentId ? getConversationHistory(data.parentId) : [];
+      
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptToUse, model: data.model }),
+        body: JSON.stringify({ 
+          prompt: promptToUse, 
+          model: data.model,
+          conversationHistory 
+        }),
       });
 
       const result = await response.json();

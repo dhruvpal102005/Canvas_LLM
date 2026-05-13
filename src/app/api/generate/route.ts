@@ -20,21 +20,26 @@ type GroqError = Error & {
 async function generateWithGroq(
   apiKey: string,
   prompt: string,
-  model: string
+  model: string,
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<string> {
   const groq = new OpenAI({
     apiKey,
     baseURL: 'https://api.groq.com/openai/v1',
   });
 
+  // Build messages array with conversation history
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+    ...(conversationHistory || []),
+    {
+      role: 'user',
+      content: prompt,
+    },
+  ];
+
   const completion = await groq.chat.completions.create({
     model,
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
+    messages,
     temperature: 0.7,
     max_tokens: 2048,
   });
@@ -44,7 +49,7 @@ async function generateWithGroq(
 
 export async function POST(req: Request) {
   try {
-    const { prompt, model } = await req.json();
+    const { prompt, model, conversationHistory } = await req.json();
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -62,8 +67,13 @@ export async function POST(req: Request) {
       ? model
       : 'llama-3.3-70b-versatile';
 
-    console.log(`[generate] Using Groq model: ${selectedModel}`);
-    const text = await generateWithGroq(process.env.GROQ_API_KEY, prompt, selectedModel);
+    console.log(`[generate] Using Groq model: ${selectedModel} with ${conversationHistory?.length || 0} history messages`);
+    const text = await generateWithGroq(
+      process.env.GROQ_API_KEY, 
+      prompt, 
+      selectedModel,
+      conversationHistory
+    );
     
     return NextResponse.json({ text });
 

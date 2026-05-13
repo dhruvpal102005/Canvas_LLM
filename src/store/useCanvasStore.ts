@@ -39,6 +39,7 @@ interface CanvasState {
   branchFromNode: (parentId: string) => string | undefined;
   deleteNode: (id: string) => void;
   clearCanvas: () => void;
+  getConversationHistory: (nodeId: string) => Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 export const useCanvasStore = create<CanvasState>()(
@@ -111,6 +112,30 @@ export const useCanvasStore = create<CanvasState>()(
           edges: get().edges.filter((e) => e.source !== id && e.target !== id),
         }),
       clearCanvas: () => set({ nodes: [], edges: [] }),
+      getConversationHistory: (nodeId) => {
+        const state = get();
+        const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        
+        // Build conversation chain by traversing up the parent chain
+        const buildChain = (currentId: string): void => {
+          const node = state.nodes.find((n) => n.id === currentId);
+          if (!node) return;
+          
+          // Recursively get parent's history first
+          if (node.data.parentId) {
+            buildChain(node.data.parentId);
+          }
+          
+          // Add current node's conversation to history
+          if (node.data.prompt && node.data.response) {
+            history.push({ role: 'user', content: node.data.prompt });
+            history.push({ role: 'assistant', content: node.data.response });
+          }
+        };
+        
+        buildChain(nodeId);
+        return history;
+      },
     }),
     {
       name: 'canvas-storage',
