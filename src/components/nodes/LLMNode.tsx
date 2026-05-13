@@ -7,7 +7,9 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
   const { updateNodeData, branchFromNode, deleteNode } = useCanvasStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [localPrompt, setLocalPrompt] = useState(data.prompt);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -16,22 +18,49 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
     }
   }, [localPrompt]);
 
+  // Countdown timer for rate-limit state
+  useEffect(() => {
+    if (retryAfter !== null && retryAfter > 0) {
+      countdownRef.current = setInterval(() => {
+        setRetryAfter((prev) => {
+          if (prev === null || prev <= 1) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [retryAfter]);
+
   const handleGenerate = async (promptToUse = localPrompt) => {
     if (!promptToUse.trim()) return;
 
-    updateNodeData(id, { prompt: promptToUse });
+    updateNodeData(id, { prompt: promptToUse, response: '' });
     setIsGenerating(true);
+    setRetryAfter(null);
 
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptToUse, model: data.model }),
       });
 
       const result = await response.json();
+
+      if (response.status === 429) {
+        // Rate limited — start countdown
+        const secs: number = result.retryAfter ?? 60;
+        setRetryAfter(secs);
+        updateNodeData(id, {
+          response: `__rate_limited__:${secs}`,
+        });
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(result.error || `API Error (${response.status})`);
@@ -80,9 +109,11 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
               <div className="flex items-center gap-1.5 px-2.5 py-0.5">
                 <span className="text-xs text-gray-400 font-medium select-none">@</span>
                 <span className="text-xs font-medium text-gray-700">
-                  {data.model === 'gemini-2.0-flash' ? 'Gemini 2.0 Flash'
-                    : data.model === 'gemini-1.5-pro' ? 'Gemini 1.5 Pro'
-                    : data.model === 'gemini-1.5-flash' ? 'Gemini 1.5 Flash'
+                  {data.model === 'llama-3.3-70b-versatile' ? 'Llama 3.3 70B'
+                    : data.model === 'llama-3.1-70b-versatile' ? 'Llama 3.1 70B'
+                    : data.model === 'llama-3.1-8b-instant' ? 'Llama 3.1 8B'
+                    : data.model === 'mixtral-8x7b-32768' ? 'Mixtral 8x7B'
+                    : data.model === 'gemma2-9b-it' ? 'Gemma 2 9B'
                     : data.model}
                 </span>
               </div>
@@ -160,7 +191,7 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
           )}
 
           {/* Response Area */}
-          {data.response && (
+          {data.response && !data.response.startsWith('__rate_limited__') && (
             <div className="mt-5 pt-5 border-t border-gray-100">
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 p-1.5 bg-gray-50 border border-gray-100 rounded-lg shadow-sm">
@@ -172,13 +203,45 @@ export default function LLMNode({ id, data }: { id: string; data: LLMNodeData })
               </div>
 
               {/* Branching / Footer */}
-              <div className="mt-6 flex justify-end">
+              {!data.response.startsWith('⚠️') && (
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => branchFromNode(id)}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-full transition-colors shadow-md"
+                  >
+                    <GitBranch className="w-3.5 h-3.5" />
+                    Branch
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Rate-limited state */}
+          {(data.response?.startsWith('__rate_limited__') || retryAfter !== null) && (
+            <div className="mt-4 pt-4 border-t border-orange-100">
+              <div className="flex items-start gap-3 p-3 bg-orange-50 border border-orange-200 rounded-2xl">
+                <div className="text-orange-500 mt-0.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[13px] font-medium text-orange-800">Rate limit reached</p>
+                  <p className="text-[11px] text-orange-600 mt-0.5">
+                    Please wait a moment before trying again.
+                    {retryAfter !== null && retryAfter > 0
+                      ? ` Retry in ${retryAfter}s`
+                      : ' Ready to retry.'}
+                  </p>
+                </div>
                 <button
-                  onClick={() => branchFromNode(id)}
-                  className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-full transition-colors shadow-md"
+                  onClick={() => handleGenerate(data.prompt)}
+                  disabled={isGenerating || (retryAfter !== null && retryAfter > 0)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium bg-orange-100 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed text-orange-700 rounded-full transition-colors border border-orange-200"
                 >
-                  <GitBranch className="w-3.5 h-3.5" />
-                  Branch
+                  <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+                  {retryAfter !== null && retryAfter > 0 ? `${retryAfter}s` : 'Retry'}
                 </button>
               </div>
             </div>

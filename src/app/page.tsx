@@ -1,15 +1,16 @@
 "use client";
 
 import Canvas from '@/components/Canvas';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
 
   // Avoid hydration mismatch from Zustand persist or ReactFlow rendering server-side
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  if (typeof window !== 'undefined' && !isClient) {
+    // Use queueMicrotask to defer state update after initial render
+    queueMicrotask(() => setIsClient(true));
+  }
 
   if (!isClient) {
     return (

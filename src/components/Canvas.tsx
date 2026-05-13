@@ -21,7 +21,7 @@ export default function Canvas() {
         id: crypto.randomUUID(),
         type: 'llmNode',
         position: { x: window.innerWidth / 2 - 240, y: window.innerHeight / 2 - 120 }, // Center node (width 480px)
-        data: { prompt: '', response: '', model: 'gemini-2.0-flash', parentId: null, childrenIds: [] }
+        data: { prompt: '', response: '', model: 'llama-3.3-70b-versatile', parentId: null, childrenIds: [] }
       });
     }
   }, [nodes.length, addNode]);

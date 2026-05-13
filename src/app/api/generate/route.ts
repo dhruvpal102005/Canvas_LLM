@@ -1,8 +1,46 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
-const SUPPORTED_MODELS = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'] as const;
-type SupportedModel = typeof SUPPORTED_MODELS[number];
+// Groq models - all available on free tier with generous limits
+const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-70b-versatile',
+  'llama-3.1-8b-instant',
+  'mixtral-8x7b-32768',
+  'gemma2-9b-it',
+] as const;
+
+type GroqModel = typeof GROQ_MODELS[number];
+
+type GroqError = Error & {
+  status?: number;
+  code?: string;
+};
+
+async function generateWithGroq(
+  apiKey: string,
+  prompt: string,
+  model: string
+): Promise<string> {
+  const groq = new OpenAI({
+    apiKey,
+    baseURL: 'https://api.groq.com/openai/v1',
+  });
+
+  const completion = await groq.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    temperature: 0.7,
+    max_tokens: 2048,
+  });
+
+  return completion.choices[0]?.message?.content || 'No response generated.';
+}
 
 export async function POST(req: Request) {
   try {
@@ -12,28 +50,51 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      console.warn('GEMINI_API_KEY is missing. Returning a mocked response.');
+    if (!process.env.GROQ_API_KEY) {
+      console.warn('GROQ_API_KEY is missing. Returning a mocked response.');
       return NextResponse.json({
-        text: `[Mocked Response] The model "${model}" received your prompt: "${prompt}".\n\nAdd your GEMINI_API_KEY to .env to get real responses.`,
+        text: `[Mocked Response] The model "${model}" received your prompt: "${prompt}".\n\nAdd your GROQ_API_KEY to .env.local to get real responses.\n\nGet a free API key at: https://console.groq.com/keys`,
       });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    // Use the requested model if it's valid, otherwise default to llama-3.3-70b-versatile
+    const selectedModel = GROQ_MODELS.includes(model as GroqModel)
+      ? model
+      : 'llama-3.3-70b-versatile';
 
-    const validModel: SupportedModel = SUPPORTED_MODELS.includes(model as SupportedModel)
-      ? (model as SupportedModel)
-      : 'gemini-2.0-flash';
-
-    const geminiModel = genAI.getGenerativeModel({ model: validModel });
-
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
-
+    console.log(`[generate] Using Groq model: ${selectedModel}`);
+    const text = await generateWithGroq(process.env.GROQ_API_KEY, prompt, selectedModel);
+    
     return NextResponse.json({ text });
+
   } catch (error: unknown) {
     console.error('API /generate error:', error);
-    const message = error instanceof Error ? error.message : 'Error communicating with AI';
+    const groqErr = error as GroqError;
+    
+    // Handle rate limiting
+    if (groqErr.status === 429 || groqErr.message?.includes('429')) {
+      return NextResponse.json(
+        {
+          error: 'rate_limited',
+          message: 'Rate limit reached. Please try again in a moment.',
+          retryAfter: 60,
+        },
+        { status: 429 }
+      );
+    }
+
+    // Handle authentication errors
+    if (groqErr.status === 401 || groqErr.message?.includes('401')) {
+      return NextResponse.json(
+        {
+          error: 'authentication_failed',
+          message: 'Invalid API key. Get a free key at https://console.groq.com/keys',
+        },
+        { status: 401 }
+      );
+    }
+
+    const message = groqErr.message || 'Error communicating with AI';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
