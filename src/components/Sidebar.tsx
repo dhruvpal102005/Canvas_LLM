@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { X, Plus, Search, ChevronDown } from "lucide-react";
+import { Plus, Search, ChevronDown } from "lucide-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useState } from "react";
 
@@ -27,18 +27,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const currentTitle = getCurrentSessionTitle();
 
   return (
-    <div className="w-[280px] bg-white border-r border-gray-200 flex flex-col h-full shadow-lg">
-      {/* Header with title */}
-      <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-gray-50">
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded transition-colors"
-        >
-          <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <h1 className="text-sm font-normal text-gray-900 truncate flex-1 ml-4">
+    <div className="w-[320px] bg-white border-r border-gray-200 flex flex-col h-full shadow-lg">
+      {/* Header with title - aligned with FloatingNav button */}
+      <div className="h-[76px] border-b border-gray-200 flex items-center px-5 bg-gray-50">
+        {/* Space for the FloatingNav button (20px left margin + 40px button width + 16px gap) */}
+        <div className="w-[76px]"></div>
+        <h1 className="text-sm font-normal text-gray-900 truncate flex-1">
           {currentTitle}
         </h1>
       </div>
@@ -99,7 +93,9 @@ export default function Sidebar({ onClose }: SidebarProps) {
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded transition-opacity"
                 >
-                  <X className="w-3.5 h-3.5 text-red-500" />
+                  <svg className="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </button>
             ))}
