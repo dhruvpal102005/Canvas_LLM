@@ -1,30 +1,30 @@
 "use client";
 
-import Canvas from '@/components/Canvas';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
-  const [isClient, setIsClient] = useState(false);
+  const [Components, setComponents] = useState<{
+    Canvas: React.ComponentType;
+  } | null>(null);
 
-  // Avoid hydration mismatch from Zustand persist or ReactFlow rendering server-side
-  if (typeof window !== 'undefined' && !isClient) {
-    // Use queueMicrotask to defer state update after initial render
-    queueMicrotask(() => setIsClient(true));
+  useEffect(() => {
+    // Import Canvas only on client side
+    import('@/components/Canvas').then((CanvasModule) => {
+      setComponents({
+        Canvas: CanvasModule.default
+      });
+    });
+  }, []);
+
+  if (!Components) {
+    return null;
   }
 
-  if (!isClient) {
-    return (
-      <div className="min-h-screen bg-white flex justify-center items-center text-gray-500">
-        Loading Canvas...
-      </div>
-    );
-  }
+  const { Canvas } = Components;
 
   return (
-    <main className="flex flex-col h-screen w-full bg-white overflow-hidden font-sans">
-      <div className="flex flex-1 overflow-hidden relative">
-        <Canvas />
-      </div>
+    <main className="flex h-screen w-full bg-white overflow-hidden font-sans">
+      <Canvas />
     </main>
   );
 }

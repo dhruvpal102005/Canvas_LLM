@@ -28,9 +28,25 @@ export type LLMNodeData = {
 
 export type LLMNode = Node<LLMNodeData>;
 
-interface CanvasState {
+export type CanvasSession = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
   nodes: LLMNode[];
   edges: Edge[];
+};
+
+interface CanvasState {
+  // Current canvas
+  nodes: LLMNode[];
+  edges: Edge[];
+  
+  // Canvas sessions
+  sessions: CanvasSession[];
+  currentSessionId: string | null;
+  
+  // Canvas operations
   onNodesChange: (changes: NodeChange<LLMNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -40,6 +56,13 @@ interface CanvasState {
   deleteNode: (id: string) => void;
   clearCanvas: () => void;
   getConversationHistory: (nodeId: string) => Array<{ role: 'user' | 'assistant'; content: string }>;
+  
+  // Session operations
+  createNewSession: () => void;
+  loadSession: (sessionId: string) => void;
+  deleteSession: (sessionId: string) => void;
+  saveCurrentSession: () => void;
+  getCurrentSessionTitle: () => string;
 }
 
 export const useCanvasStore = create<CanvasState>()(
@@ -47,22 +70,33 @@ export const useCanvasStore = create<CanvasState>()(
     (set, get) => ({
       nodes: [],
       edges: [],
+      sessions: [],
+      currentSessionId: null,
+      
       onNodesChange: (changes) => {
         set({ nodes: applyNodeChanges(changes, get().nodes) as LLMNode[] });
+        get().saveCurrentSession();
       },
       onEdgesChange: (changes) => {
         set({ edges: applyEdgeChanges(changes, get().edges) });
+        get().saveCurrentSession();
       },
       onConnect: (connection) => {
         set({ edges: addEdge(connection, get().edges) });
+        get().saveCurrentSession();
       },
-      addNode: (node) => set({ nodes: [...get().nodes, node] }),
-      updateNodeData: (id, data) =>
+      addNode: (node) => {
+        set({ nodes: [...get().nodes, node] });
+        get().saveCurrentSession();
+      },
+      updateNodeData: (id, data) => {
         set({
           nodes: get().nodes.map((node) =>
             node.id === id ? { ...node, data: { ...node.data, ...data } } : node
           ),
-        }),
+        });
+        get().saveCurrentSession();
+      },
       branchFromNode: (parentId) => {
         const state = get();
         const parentNode = state.nodes.find((n) => n.id === parentId);
@@ -106,12 +140,17 @@ export const useCanvasStore = create<CanvasState>()(
 
         return newNodeId;
       },
-      deleteNode: (id) =>
+      deleteNode: (id) => {
         set({
           nodes: get().nodes.filter((n) => n.id !== id),
           edges: get().edges.filter((e) => e.source !== id && e.target !== id),
-        }),
-      clearCanvas: () => set({ nodes: [], edges: [] }),
+        });
+        get().saveCurrentSession();
+      },
+      clearCanvas: () => {
+        set({ nodes: [], edges: [] });
+        get().saveCurrentSession();
+      },
       getConversationHistory: (nodeId) => {
         const state = get();
         const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -135,6 +174,100 @@ export const useCanvasStore = create<CanvasState>()(
         
         buildChain(nodeId);
         return history;
+      },
+      
+      // Session management
+      createNewSession: () => {
+        const state = get();
+        const newSessionId = crypto.randomUUID();
+        const newSession: CanvasSession = {
+          id: newSessionId,
+          title: 'New Canvas',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          nodes: [],
+          edges: [],
+        };
+        
+        set({
+          sessions: [...state.sessions, newSession],
+          currentSessionId: newSessionId,
+          nodes: [],
+          edges: [],
+        });
+      },
+      
+      loadSession: (sessionId) => {
+        const state = get();
+        const session = state.sessions.find((s) => s.id === sessionId);
+        if (session) {
+          set({
+            currentSessionId: sessionId,
+            nodes: session.nodes,
+            edges: session.edges,
+          });
+        }
+      },
+      
+      deleteSession: (sessionId) => {
+        const state = get();
+        const updatedSessions = state.sessions.filter((s) => s.id !== sessionId);
+        
+        // If deleting current session, switch to another or create new
+        if (state.currentSessionId === sessionId) {
+          if (updatedSessions.length > 0) {
+            const newCurrent = updatedSessions[0];
+            set({
+              sessions: updatedSessions,
+              currentSessionId: newCurrent.id,
+              nodes: newCurrent.nodes,
+              edges: newCurrent.edges,
+            });
+          } else {
+            // No sessions left, create a new one
+            set({ sessions: [], currentSessionId: null, nodes: [], edges: [] });
+            get().createNewSession();
+          }
+        } else {
+          set({ sessions: updatedSessions });
+        }
+      },
+      
+      saveCurrentSession: () => {
+        const state = get();
+        if (!state.currentSessionId) {
+          // No current session, create one
+          get().createNewSession();
+          return;
+        }
+        
+        const updatedSessions = state.sessions.map((session) => {
+          if (session.id === state.currentSessionId) {
+            // Generate title from first node's prompt
+            const firstNode = state.nodes.find((n) => !n.data.parentId);
+            const title = firstNode?.data.prompt 
+              ? firstNode.data.prompt.slice(0, 50) + (firstNode.data.prompt.length > 50 ? '...' : '')
+              : 'New Canvas';
+            
+            return {
+              ...session,
+              title,
+              updatedAt: Date.now(),
+              nodes: state.nodes,
+              edges: state.edges,
+            };
+          }
+          return session;
+        });
+        
+        set({ sessions: updatedSessions });
+      },
+      
+      getCurrentSessionTitle: () => {
+        const state = get();
+        if (!state.currentSessionId) return 'New Canvas';
+        const session = state.sessions.find((s) => s.id === state.currentSessionId);
+        return session?.title || 'New Canvas';
       },
     }),
     {
